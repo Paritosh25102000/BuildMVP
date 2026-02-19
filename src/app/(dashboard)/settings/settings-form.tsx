@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Separator } from '@/components/ui/separator';
 import { LogoUpload } from '@/components/settings/logo-upload';
 import { toast } from 'sonner';
-import { Loader2, Save, Building2, Mail, Phone, MapPin, FileText } from 'lucide-react';
+import { Loader2, Save, Building2, Mail, Phone, MapPin, FileText, AlignLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface SettingsFormProps {
@@ -31,6 +31,8 @@ export function SettingsForm({ profile, userId }: SettingsFormProps) {
     business_email: profile?.business_email || '',
     license_number: profile?.license_number || '',
     logo_url: profile?.logo_url || '',
+    default_payment_terms: profile?.default_payment_terms || '',
+    business_intro: profile?.business_intro || '',
   });
 
   const handleChange = (
@@ -62,6 +64,8 @@ export function SettingsForm({ profile, userId }: SettingsFormProps) {
           business_email: formData.business_email || null,
           license_number: formData.license_number || null,
           logo_url: formData.logo_url || null,
+          default_payment_terms: formData.default_payment_terms || null,
+          business_intro: formData.business_intro || null,
         })
         .eq('id', userId);
 
@@ -203,6 +207,52 @@ export function SettingsForm({ profile, userId }: SettingsFormProps) {
                 className="mt-1.5"
               />
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Document Defaults Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlignLeft className="h-5 w-5 text-blue-600" />
+            Document Defaults
+          </CardTitle>
+          <CardDescription>
+            These appear automatically on new estimates and invoices.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label htmlFor="default_payment_terms">Default Payment Terms</Label>
+            <Textarea
+              id="default_payment_terms"
+              name="default_payment_terms"
+              value={formData.default_payment_terms}
+              onChange={handleChange}
+              placeholder={`Payment due within 30 days of invoice date.\nLate payments subject to 1.5% monthly interest.\nAccepted: check, ACH, Zelle.`}
+              rows={4}
+              className="mt-1.5"
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              Auto-fills the Notes & Terms field on every new estimate
+            </p>
+          </div>
+
+          <div>
+            <Label htmlFor="business_intro">Business Introduction</Label>
+            <Textarea
+              id="business_intro"
+              name="business_intro"
+              value={formData.business_intro}
+              onChange={handleChange}
+              placeholder="Thank you for the opportunity to provide this estimate. We are committed to quality craftsmanship and clear communication throughout your project."
+              rows={3}
+              className="mt-1.5"
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              A brief introduction to your business for client-facing documents
+            </p>
           </div>
         </CardContent>
       </Card>

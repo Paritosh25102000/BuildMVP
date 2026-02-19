@@ -20,6 +20,8 @@ export interface Profile {
   business_email: string | null;
   license_number: string | null;
   logo_url: string | null;
+  default_payment_terms: string | null;
+  business_intro: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -51,6 +53,8 @@ export interface Estimate {
   tax_amount: number;
   total: number;
   notes: string | null;
+  job_site_address: string | null;
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -84,6 +88,7 @@ export interface Invoice {
   tax_amount: number;
   total: number;
   notes: string | null;
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -141,6 +146,8 @@ export interface ProfileInput {
   business_email?: string | null;
   license_number?: string | null;
   logo_url?: string | null;
+  default_payment_terms?: string | null;
+  business_intro?: string | null;
 }
 
 export interface ClientInput {
@@ -161,6 +168,8 @@ export interface EstimateInput {
   valid_until?: string | null;
   tax_rate?: number;
   notes?: string | null;
+  job_site_address?: string | null;
+  archived_at?: string | null;
 }
 
 export interface EstimateItemInput {
@@ -183,6 +192,7 @@ export interface InvoiceInput {
   due_date?: string | null;
   tax_rate?: number;
   notes?: string | null;
+  archived_at?: string | null;
 }
 
 export interface InvoiceItemInput {

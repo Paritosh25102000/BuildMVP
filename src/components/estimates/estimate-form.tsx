@@ -17,14 +17,22 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { LineItems, LineItem } from './line-items';
 import { toast } from 'sonner';
-import { Loader2, Save, Send, FileText } from 'lucide-react';
+import { Loader2, Send, FileText, Plus, UserPlus } from 'lucide-react';
 import { sendEstimateAction } from '@/app/actions/send-estimate';
 
 interface EstimateFormProps {
   clients: Client[];
   userId: string;
+  defaultPaymentTerms?: string;
   initialData?: {
     id?: string;
     client_id: string | null;
@@ -36,15 +44,19 @@ interface EstimateFormProps {
     valid_until: string | null;
     tax_rate: number;
     notes: string;
+    job_site_address: string;
     items: LineItem[];
   };
   mode: 'create' | 'edit';
 }
 
-export function EstimateForm({ clients, userId, initialData, mode }: EstimateFormProps) {
+export function EstimateForm({ clients: initialClients, userId, defaultPaymentTerms, initialData, mode }: EstimateFormProps) {
   const router = useRouter();
   const supabase = createClient();
   const [isSaving, setIsSaving] = useState(false);
+
+  // Local clients list so inline creation can extend it
+  const [clientsList, setClientsList] = useState<Client[]>(initialClients);
 
   // Form state
   const [clientId, setClientId] = useState(initialData?.client_id || '');
@@ -55,8 +67,20 @@ export function EstimateForm({ clients, userId, initialData, mode }: EstimateFor
   const [issueDate, setIssueDate] = useState(initialData?.issue_date || new Date().toISOString().split('T')[0]);
   const [validUntil, setValidUntil] = useState(initialData?.valid_until || '');
   const [taxRate, setTaxRate] = useState(initialData?.tax_rate || 0);
-  const [notes, setNotes] = useState(initialData?.notes || '');
+  const [notes, setNotes] = useState(
+    initialData?.notes !== undefined
+      ? initialData.notes
+      : (mode === 'create' ? defaultPaymentTerms || '' : '')
+  );
+  const [jobSiteAddress, setJobSiteAddress] = useState(initialData?.job_site_address || '');
   const [items, setItems] = useState<LineItem[]>(initialData?.items || []);
+
+  // Inline client creation state
+  const [showNewClientDialog, setShowNewClientDialog] = useState(false);
+  const [newClientName, setNewClientName] = useState('');
+  const [newClientEmail, setNewClientEmail] = useState('');
+  const [newClientPhone, setNewClientPhone] = useState('');
+  const [isCreatingClient, setIsCreatingClient] = useState(false);
 
   // Generate estimate number on mount for new estimates
   useEffect(() => {
@@ -79,6 +103,43 @@ export function EstimateForm({ clients, userId, initialData, mode }: EstimateFor
     }).format(amount);
   };
 
+  const handleCreateClient = async () => {
+    if (!newClientName.trim()) {
+      toast.error('Client name is required');
+      return;
+    }
+    setIsCreatingClient(true);
+    try {
+      const { data: newClient, error } = await supabase
+        .from('clients')
+        .insert({
+          user_id: userId,
+          name: newClientName.trim(),
+          email: newClientEmail.trim() || null,
+          phone: newClientPhone.trim() || null,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const created = newClient as Client;
+      setClientsList(prev =>
+        [...prev, created].sort((a, b) => a.name.localeCompare(b.name))
+      );
+      setClientId(created.id);
+      setShowNewClientDialog(false);
+      setNewClientName('');
+      setNewClientEmail('');
+      setNewClientPhone('');
+      toast.success(`${created.name} added`);
+    } catch {
+      toast.error('Failed to create client');
+    } finally {
+      setIsCreatingClient(false);
+    }
+  };
+
   const handleSubmit = async (saveStatus: EstimateStatus = status, sendEmail: boolean = false) => {
     if (!title.trim()) {
       toast.error('Please enter an estimate title');
@@ -95,13 +156,12 @@ export function EstimateForm({ clients, userId, initialData, mode }: EstimateFor
       return;
     }
 
-    // If sending email, require a client with email
     if (sendEmail) {
       if (!clientId) {
         toast.error('Please select a client to send the estimate');
         return;
       }
-      const selectedClient = clients.find(c => c.id === clientId);
+      const selectedClient = clientsList.find(c => c.id === clientId);
       if (!selectedClient?.email) {
         toast.error('Selected client does not have an email address');
         return;
@@ -114,7 +174,6 @@ export function EstimateForm({ clients, userId, initialData, mode }: EstimateFor
       let estimateId: string;
 
       if (mode === 'create') {
-        // Create new estimate (save as draft first if sending)
         const { data: estimate, error: estimateError } = await supabase
           .from('estimates')
           .insert({
@@ -131,6 +190,7 @@ export function EstimateForm({ clients, userId, initialData, mode }: EstimateFor
             tax_amount: taxAmount,
             total,
             notes: notes || null,
+            job_site_address: jobSiteAddress || null,
           })
           .select()
           .single();
@@ -138,7 +198,6 @@ export function EstimateForm({ clients, userId, initialData, mode }: EstimateFor
         if (estimateError) throw estimateError;
         estimateId = estimate.id;
 
-        // Create line items
         const itemsToInsert = items.map((item, index) => ({
           estimate_id: estimate.id,
           description: item.description,
@@ -156,7 +215,6 @@ export function EstimateForm({ clients, userId, initialData, mode }: EstimateFor
       } else {
         estimateId = initialData!.id!;
 
-        // Update existing estimate
         const { error: estimateError } = await supabase
           .from('estimates')
           .update({
@@ -172,12 +230,12 @@ export function EstimateForm({ clients, userId, initialData, mode }: EstimateFor
             tax_amount: taxAmount,
             total,
             notes: notes || null,
+            job_site_address: jobSiteAddress || null,
           })
           .eq('id', initialData!.id);
 
         if (estimateError) throw estimateError;
 
-        // Delete existing items and re-create
         await supabase
           .from('estimate_items')
           .delete()
@@ -201,12 +259,10 @@ export function EstimateForm({ clients, userId, initialData, mode }: EstimateFor
         }
       }
 
-      // Send email if requested
       if (sendEmail) {
         const result = await sendEstimateAction({ estimateId });
         if (!result.success) {
           toast.error(result.error || 'Failed to send email');
-          // Still redirect to the estimate page even if email fails
           router.push(`/estimates/${estimateId}`);
           router.refresh();
           return;
@@ -228,7 +284,59 @@ export function EstimateForm({ clients, userId, initialData, mode }: EstimateFor
 
   return (
     <div className="space-y-6">
-      {/* Header Info */}
+      {/* Client — Full Width at Top */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Client</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <Select
+                value={clientId || 'none'}
+                onValueChange={(v) => setClientId(v === 'none' ? '' : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a client..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No client selected</SelectItem>
+                  {clientsList.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowNewClientDialog(true)}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              New Client
+            </Button>
+          </div>
+
+          <div>
+            <Label htmlFor="job_site_address">Job Site Address</Label>
+            <Textarea
+              id="job_site_address"
+              value={jobSiteAddress}
+              onChange={(e) => setJobSiteAddress(e.target.value)}
+              placeholder={'123 Work Site Drive\nCity, ST 12345'}
+              rows={2}
+              className="mt-1.5"
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              Where the work will be performed (separate from client billing address)
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Estimate Details & Dates */}
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
@@ -256,14 +364,14 @@ export function EstimateForm({ clients, userId, initialData, mode }: EstimateFor
                     <SelectItem value="draft">Draft</SelectItem>
                     <SelectItem value="sent">Sent</SelectItem>
                     <SelectItem value="approved">Approved</SelectItem>
-                    <SelectItem value="declined">Declined</SelectItem>
+                    <SelectItem value="declined">Failed Deal</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
             <div>
-              <Label htmlFor="title">Title</Label>
+              <Label htmlFor="title">Project Title</Label>
               <Input
                 id="title"
                 value={title}
@@ -289,29 +397,9 @@ export function EstimateForm({ clients, userId, initialData, mode }: EstimateFor
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Client & Dates</CardTitle>
+            <CardTitle className="text-lg">Dates & Tax</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="client">Client</Label>
-              <Select
-                value={clientId || 'none'}
-                onValueChange={(v) => setClientId(v === 'none' ? '' : v)}
-              >
-                <SelectTrigger className="mt-1.5">
-                  <SelectValue placeholder="Select a client..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No client selected</SelectItem>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <Label htmlFor="issue_date">Issue Date</Label>
@@ -363,7 +451,7 @@ export function EstimateForm({ clients, userId, initialData, mode }: EstimateFor
         </CardContent>
       </Card>
 
-      {/* Totals & Notes */}
+      {/* Notes & Summary */}
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
@@ -437,6 +525,71 @@ export function EstimateForm({ clients, userId, initialData, mode }: EstimateFor
           )}
         </Button>
       </div>
+
+      {/* New Client Dialog */}
+      <Dialog open={showNewClientDialog} onOpenChange={setShowNewClientDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Client</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label htmlFor="new_client_name">Name *</Label>
+              <Input
+                id="new_client_name"
+                value={newClientName}
+                onChange={(e) => setNewClientName(e.target.value)}
+                placeholder="John Smith"
+                className="mt-1.5"
+                onKeyDown={(e) => e.key === 'Enter' && handleCreateClient()}
+              />
+            </div>
+            <div>
+              <Label htmlFor="new_client_email">Email</Label>
+              <Input
+                id="new_client_email"
+                type="email"
+                value={newClientEmail}
+                onChange={(e) => setNewClientEmail(e.target.value)}
+                placeholder="john@example.com"
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <Label htmlFor="new_client_phone">Phone</Label>
+              <Input
+                id="new_client_phone"
+                type="tel"
+                value={newClientPhone}
+                onChange={(e) => setNewClientPhone(e.target.value)}
+                placeholder="(555) 123-4567"
+                className="mt-1.5"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowNewClientDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleCreateClient} disabled={isCreatingClient}>
+              {isCreatingClient ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Add Client
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

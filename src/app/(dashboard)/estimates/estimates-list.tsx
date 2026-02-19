@@ -46,7 +46,7 @@ const statusConfig: Record<EstimateStatus, { label: string; variant: 'default' |
   draft: { label: 'Draft', variant: 'secondary', icon: <FileText className="h-3 w-3" />, color: 'bg-slate-100 border-slate-200' },
   sent: { label: 'Sent', variant: 'default', icon: <Send className="h-3 w-3" />, color: 'bg-blue-50 border-blue-200' },
   approved: { label: 'Approved', variant: 'default', icon: <CheckCircle className="h-3 w-3" />, color: 'bg-green-50 border-green-200' },
-  declined: { label: 'Declined', variant: 'destructive', icon: <XCircle className="h-3 w-3" />, color: 'bg-red-50 border-red-200' },
+  declined: { label: 'Failed Deal', variant: 'destructive', icon: <XCircle className="h-3 w-3" />, color: 'bg-red-50 border-red-200' },
 };
 
 export function EstimatesList({ estimates }: EstimatesListProps) {

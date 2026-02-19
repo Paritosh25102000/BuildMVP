@@ -33,6 +33,8 @@ import {
   MapPin,
   FileText,
   Loader2,
+  Archive,
+  ArchiveRestore,
 } from 'lucide-react';
 
 interface InvoiceDetailProps {
@@ -51,6 +53,7 @@ interface InvoiceDetailProps {
     total: number;
     notes: string | null;
     source_estimate_id: string | null;
+    archived_at: string | null;
     client: {
       id: string;
       name: string;
@@ -79,8 +82,10 @@ export function InvoiceDetail({ invoice, profile }: InvoiceDetailProps) {
   const router = useRouter();
   const supabase = createClient();
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(invoice.status);
   const [paidDate, setPaidDate] = useState(invoice.paid_date);
+  const [archivedAt, setArchivedAt] = useState(invoice.archived_at);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -125,6 +130,27 @@ export function InvoiceDetail({ invoice, profile }: InvoiceDetailProps) {
     }
   };
 
+  const handleArchive = async () => {
+    setIsArchiving(true);
+    const newArchivedAt = archivedAt ? null : new Date().toISOString();
+    try {
+      const { error } = await supabase
+        .from('invoices')
+        .update({ archived_at: newArchivedAt })
+        .eq('id', invoice.id);
+
+      if (error) throw error;
+      setArchivedAt(newArchivedAt);
+      toast.success(newArchivedAt ? 'Invoice archived' : 'Invoice restored');
+      if (newArchivedAt) router.push('/invoices');
+    } catch (error) {
+      console.error('Error archiving invoice:', error);
+      toast.error('Failed to update invoice');
+    } finally {
+      setIsArchiving(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!confirm('Are you sure you want to delete this invoice? This action cannot be undone.')) {
       return;
@@ -159,6 +185,20 @@ export function InvoiceDetail({ invoice, profile }: InvoiceDetailProps) {
 
   return (
     <div className="space-y-6">
+      {/* Archived banner */}
+      {archivedAt && (
+        <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="flex items-center gap-2 text-amber-700">
+            <Archive className="h-4 w-4" />
+            <span className="text-sm font-medium">This invoice is archived</span>
+          </div>
+          <Button variant="outline" size="sm" onClick={handleArchive} disabled={isArchiving}>
+            <ArchiveRestore className="mr-2 h-4 w-4" />
+            Restore
+          </Button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -193,6 +233,14 @@ export function InvoiceDetail({ invoice, profile }: InvoiceDetailProps) {
                   </Link>
                 </DropdownMenuItem>
               )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleArchive} disabled={isArchiving}>
+                {archivedAt ? (
+                  <><ArchiveRestore className="mr-2 h-4 w-4" />Unarchive</>
+                ) : (
+                  <><Archive className="mr-2 h-4 w-4" />Archive</>
+                )}
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleDelete} className="text-red-600">
                 <Trash2 className="mr-2 h-4 w-4" />

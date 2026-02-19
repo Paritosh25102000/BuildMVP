@@ -14,11 +14,10 @@ export default async function NewEstimatePage() {
     redirect('/login');
   }
 
-  // Fetch clients for the dropdown
-  const { data: clients } = await supabase
-    .from('clients')
-    .select('*')
-    .order('name');
+  const [{ data: clients }, { data: profile }] = await Promise.all([
+    supabase.from('clients').select('*').order('name'),
+    supabase.from('profiles').select('default_payment_terms').eq('id', user.id).single(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -39,7 +38,12 @@ export default async function NewEstimatePage() {
         </p>
       </div>
 
-      <EstimateForm clients={(clients as Client[]) || []} userId={user.id} mode="create" />
+      <EstimateForm
+        clients={(clients as Client[]) || []}
+        userId={user.id}
+        mode="create"
+        defaultPaymentTerms={profile?.default_payment_terms || ''}
+      />
     </div>
   );
 }

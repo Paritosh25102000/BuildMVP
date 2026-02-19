@@ -33,6 +33,8 @@ import {
   Mail,
   Phone,
   MapPin,
+  Archive,
+  ArchiveRestore,
 } from 'lucide-react';
 import { sendEstimateAction } from '@/app/actions/send-estimate';
 
@@ -50,6 +52,8 @@ interface EstimateDetailProps {
     tax_amount: number;
     total: number;
     notes: string | null;
+    job_site_address: string | null;
+    archived_at: string | null;
     client: {
       id: string;
       name: string;
@@ -74,7 +78,7 @@ const statusConfig: Record<EstimateStatus, { label: string; variant: 'default' |
   draft: { label: 'Draft', variant: 'secondary', icon: <FileText className="h-3 w-3" /> },
   sent: { label: 'Sent', variant: 'default', icon: <Send className="h-3 w-3" /> },
   approved: { label: 'Approved', variant: 'default', icon: <CheckCircle className="h-3 w-3" /> },
-  declined: { label: 'Declined', variant: 'destructive', icon: <XCircle className="h-3 w-3" /> },
+  declined: { label: 'Failed Deal', variant: 'destructive', icon: <XCircle className="h-3 w-3" /> },
 };
 
 export function EstimateDetail({ estimate, profile, userId }: EstimateDetailProps) {
@@ -83,13 +87,14 @@ export function EstimateDetail({ estimate, profile, userId }: EstimateDetailProp
   const [isConverting, setIsConverting] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [archivedAt, setArchivedAt] = useState(estimate.archived_at);
 
   const handleSendToClient = async () => {
     if (!estimate.client?.email) {
       toast.error('Client does not have an email address');
       return;
     }
-
     setIsSending(true);
     try {
       const result = await sendEstimateAction({ estimateId: estimate.id });
@@ -108,10 +113,7 @@ export function EstimateDetail({ estimate, profile, userId }: EstimateDetailProp
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount);
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
   };
 
   const formatDate = (date: string) => {
@@ -131,7 +133,6 @@ export function EstimateDetail({ estimate, profile, userId }: EstimateDetailProp
         .eq('id', estimate.id);
 
       if (error) throw error;
-
       toast.success(`Status updated to ${statusConfig[newStatus].label}`);
       router.refresh();
     } catch (error) {
@@ -142,13 +143,32 @@ export function EstimateDetail({ estimate, profile, userId }: EstimateDetailProp
     }
   };
 
+  const handleArchive = async () => {
+    setIsArchiving(true);
+    const newArchivedAt = archivedAt ? null : new Date().toISOString();
+    try {
+      const { error } = await supabase
+        .from('estimates')
+        .update({ archived_at: newArchivedAt })
+        .eq('id', estimate.id);
+
+      if (error) throw error;
+      setArchivedAt(newArchivedAt);
+      toast.success(newArchivedAt ? 'Estimate archived' : 'Estimate restored');
+      if (newArchivedAt) router.push('/estimates');
+    } catch (error) {
+      console.error('Error archiving estimate:', error);
+      toast.error('Failed to update estimate');
+    } finally {
+      setIsArchiving(false);
+    }
+  };
+
   const handleConvertToInvoice = async () => {
     setIsConverting(true);
     try {
-      // Generate invoice number
       const invoiceNumber = `INV-${Date.now().toString().slice(-6)}`;
 
-      // Create invoice from estimate
       const { data: invoice, error: invoiceError } = await supabase
         .from('invoices')
         .insert({
@@ -160,7 +180,7 @@ export function EstimateDetail({ estimate, profile, userId }: EstimateDetailProp
           description: estimate.description,
           status: 'unpaid',
           issue_date: new Date().toISOString().split('T')[0],
-          due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days
+          due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
           tax_rate: estimate.tax_rate,
           notes: estimate.notes,
         })
@@ -169,7 +189,6 @@ export function EstimateDetail({ estimate, profile, userId }: EstimateDetailProp
 
       if (invoiceError) throw invoiceError;
 
-      // Copy line items
       const itemsToInsert = estimate.items.map((item, index) => ({
         invoice_id: invoice.id,
         description: item.description,
@@ -183,7 +202,6 @@ export function EstimateDetail({ estimate, profile, userId }: EstimateDetailProp
         const { error: itemsError } = await supabase
           .from('invoice_items')
           .insert(itemsToInsert);
-
         if (itemsError) throw itemsError;
       }
 
@@ -201,7 +219,6 @@ export function EstimateDetail({ estimate, profile, userId }: EstimateDetailProp
     if (!confirm('Are you sure you want to delete this estimate? This action cannot be undone.')) {
       return;
     }
-
     try {
       const { error } = await supabase
         .from('estimates')
@@ -209,7 +226,6 @@ export function EstimateDetail({ estimate, profile, userId }: EstimateDetailProp
         .eq('id', estimate.id);
 
       if (error) throw error;
-
       toast.success('Estimate deleted');
       router.push('/estimates');
     } catch (error) {
@@ -230,31 +246,52 @@ export function EstimateDetail({ estimate, profile, userId }: EstimateDetailProp
 
   return (
     <div className="space-y-6">
+      {/* Archived banner */}
+      {archivedAt && (
+        <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="flex items-center gap-2 text-amber-700">
+            <Archive className="h-4 w-4" />
+            <span className="text-sm font-medium">This estimate is archived</span>
+          </div>
+          <Button variant="outline" size="sm" onClick={handleArchive} disabled={isArchiving}>
+            <ArchiveRestore className="mr-2 h-4 w-4" />
+            Restore
+          </Button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link
-            href="/estimates"
-            className="flex items-center text-sm text-slate-500 hover:text-slate-900"
-          >
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            Back to Estimates
-          </Link>
-        </div>
+        <Link
+          href="/estimates"
+          className="flex items-center text-sm text-slate-500 hover:text-slate-900"
+        >
+          <ChevronLeft className="h-4 w-4 mr-1" />
+          Back to Estimates
+        </Link>
 
         <div className="flex items-center gap-3">
           {estimate.status === 'draft' && estimate.client?.email && (
             <Button onClick={handleSendToClient} disabled={isSending}>
               {isSending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Sending...
-                </>
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending...</>
               ) : (
-                <>
-                  <Send className="mr-2 h-4 w-4" />
-                  Send to Client
-                </>
+                <><Send className="mr-2 h-4 w-4" />Send to Client</>
+              )}
+            </Button>
+          )}
+
+          {/* Owner can approve once estimate is sent */}
+          {estimate.status === 'sent' && (
+            <Button
+              onClick={() => handleStatusChange('approved')}
+              disabled={isUpdatingStatus}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {isUpdatingStatus ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Approving...</>
+              ) : (
+                <><CheckCircle className="mr-2 h-4 w-4" />Approve Estimate</>
               )}
             </Button>
           )}
@@ -262,15 +299,9 @@ export function EstimateDetail({ estimate, profile, userId }: EstimateDetailProp
           {estimate.status === 'approved' && (
             <Button onClick={handleConvertToInvoice} disabled={isConverting}>
               {isConverting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Converting...
-                </>
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Converting...</>
               ) : (
-                <>
-                  <Receipt className="mr-2 h-4 w-4" />
-                  Convert to Invoice
-                </>
+                <><Receipt className="mr-2 h-4 w-4" />Convert to Invoice</>
               )}
             </Button>
           )}
@@ -289,45 +320,36 @@ export function EstimateDetail({ estimate, profile, userId }: EstimateDetailProp
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => handleStatusChange('draft')}
-                disabled={isUpdatingStatus}
-              >
-                <FileText className="mr-2 h-4 w-4" />
-                Mark as Draft
+              <DropdownMenuItem onClick={() => handleStatusChange('draft')} disabled={isUpdatingStatus}>
+                <FileText className="mr-2 h-4 w-4" />Mark as Draft
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => handleStatusChange('sent')}
-                disabled={isUpdatingStatus}
-              >
-                <Send className="mr-2 h-4 w-4" />
-                Mark as Sent
+              <DropdownMenuItem onClick={() => handleStatusChange('sent')} disabled={isUpdatingStatus}>
+                <Send className="mr-2 h-4 w-4" />Mark as Sent
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => handleStatusChange('approved')}
-                disabled={isUpdatingStatus}
-              >
-                <CheckCircle className="mr-2 h-4 w-4" />
-                Mark as Approved
+              <DropdownMenuItem onClick={() => handleStatusChange('approved')} disabled={isUpdatingStatus}>
+                <CheckCircle className="mr-2 h-4 w-4" />Mark as Approved
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => handleStatusChange('declined')}
-                disabled={isUpdatingStatus}
-              >
-                <XCircle className="mr-2 h-4 w-4" />
-                Mark as Declined
+              <DropdownMenuItem onClick={() => handleStatusChange('declined')} disabled={isUpdatingStatus}>
+                <XCircle className="mr-2 h-4 w-4" />Mark as Failed Deal
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleArchive} disabled={isArchiving}>
+                {archivedAt ? (
+                  <><ArchiveRestore className="mr-2 h-4 w-4" />Unarchive</>
+                ) : (
+                  <><Archive className="mr-2 h-4 w-4" />Archive</>
+                )}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleDelete} className="text-red-600">
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
+                <Trash2 className="mr-2 h-4 w-4" />Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
 
-      {/* Estimate Header */}
+      {/* Title row */}
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-3">
@@ -337,9 +359,7 @@ export function EstimateDetail({ estimate, profile, userId }: EstimateDetailProp
               {statusInfo.label}
             </Badge>
           </div>
-          <p className="text-slate-500 mt-1">
-            Estimate #{estimate.estimate_number}
-          </p>
+          <p className="text-slate-500 mt-1">Estimate #{estimate.estimate_number}</p>
         </div>
         <div className="text-right">
           <p className="text-sm text-slate-500">Total Amount</p>
@@ -349,36 +369,26 @@ export function EstimateDetail({ estimate, profile, userId }: EstimateDetailProp
 
       {/* Main Content */}
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Left Column - Details */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Description */}
           {estimate.description && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Description</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-lg">Description</CardTitle></CardHeader>
               <CardContent>
                 <p className="text-slate-600 whitespace-pre-wrap">{estimate.description}</p>
               </CardContent>
             </Card>
           )}
 
-          {/* Line Items */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Line Items</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-lg">Line Items</CardTitle></CardHeader>
             <CardContent>
               <LineItems items={lineItems} onChange={() => {}} readOnly />
             </CardContent>
           </Card>
 
-          {/* Notes */}
           {estimate.notes && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Notes & Terms</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-lg">Notes & Terms</CardTitle></CardHeader>
               <CardContent>
                 <p className="text-slate-600 whitespace-pre-wrap">{estimate.notes}</p>
               </CardContent>
@@ -386,13 +396,9 @@ export function EstimateDetail({ estimate, profile, userId }: EstimateDetailProp
           )}
         </div>
 
-        {/* Right Column - Summary & Client */}
         <div className="space-y-6">
-          {/* Summary */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Summary</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-lg">Summary</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-slate-500">Subtotal</span>
@@ -410,11 +416,8 @@ export function EstimateDetail({ estimate, profile, userId }: EstimateDetailProp
             </CardContent>
           </Card>
 
-          {/* Dates */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Dates</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-lg">Dates</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-slate-500">Issue Date</span>
@@ -429,12 +432,21 @@ export function EstimateDetail({ estimate, profile, userId }: EstimateDetailProp
             </CardContent>
           </Card>
 
-          {/* Client Info */}
+          {estimate.job_site_address && (
+            <Card>
+              <CardHeader><CardTitle className="text-lg">Job Site</CardTitle></CardHeader>
+              <CardContent>
+                <div className="flex items-start gap-2 text-sm text-slate-600">
+                  <MapPin className="h-4 w-4 text-slate-400 mt-0.5" />
+                  <span className="whitespace-pre-line">{estimate.job_site_address}</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {estimate.client && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Client</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-lg">Client</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <p className="font-medium text-slate-900">{estimate.client.name}</p>
                 {estimate.client.email && (
@@ -463,12 +475,9 @@ export function EstimateDetail({ estimate, profile, userId }: EstimateDetailProp
             </Card>
           )}
 
-          {/* Business Info */}
           {profile && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">From</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-lg">From</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Building2 className="h-4 w-4 text-slate-400" />
@@ -477,9 +486,7 @@ export function EstimateDetail({ estimate, profile, userId }: EstimateDetailProp
                   </span>
                 </div>
                 {profile.license_number && (
-                  <p className="text-sm text-slate-500">
-                    License: {profile.license_number}
-                  </p>
+                  <p className="text-sm text-slate-500">License: {profile.license_number}</p>
                 )}
               </CardContent>
             </Card>

@@ -51,6 +51,7 @@ export default async function EditEstimatePage({ params }: EditEstimatePageProps
     valid_until: estimate.valid_until,
     tax_rate: estimate.tax_rate,
     notes: estimate.notes || '',
+    job_site_address: estimate.job_site_address || '',
     items: estimate.items.map((item: { id: string; description: string; quantity: number; unit: string; unit_price: number }) => ({
       id: item.id,
       description: item.description,

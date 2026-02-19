@@ -14,6 +14,7 @@ export default async function EstimatesPage() {
   const { data: estimates } = await supabase
     .from('estimates')
     .select('*, client:clients(*)')
+    .is('archived_at', null)
     .order('created_at', { ascending: false });
 
   return <EstimatesList estimates={estimates || []} />;

@@ -14,6 +14,7 @@ export default async function InvoicesPage() {
   const { data: invoices } = await supabase
     .from('invoices')
     .select('*, client:clients(*)')
+    .is('archived_at', null)
     .order('created_at', { ascending: false });
 
   return <InvoicesList invoices={invoices || []} />;
