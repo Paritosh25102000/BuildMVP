@@ -126,7 +126,10 @@ export function EstimateForm({ clients, userId, initialData, mode }: EstimateFor
             status: sendEmail ? 'draft' : saveStatus,
             issue_date: issueDate,
             valid_until: validUntil || null,
+            subtotal,
             tax_rate: taxRate,
+            tax_amount: taxAmount,
+            total,
             notes: notes || null,
           })
           .select()
@@ -164,7 +167,10 @@ export function EstimateForm({ clients, userId, initialData, mode }: EstimateFor
             status: sendEmail ? initialData!.status : saveStatus,
             issue_date: issueDate,
             valid_until: validUntil || null,
+            subtotal,
             tax_rate: taxRate,
+            tax_amount: taxAmount,
+            total,
             notes: notes || null,
           })
           .eq('id', initialData!.id);

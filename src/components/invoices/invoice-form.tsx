@@ -119,7 +119,10 @@ export function InvoiceForm({ clients, userId, initialData, mode }: InvoiceFormP
             status,
             issue_date: issueDate,
             due_date: dueDate || null,
+            subtotal,
             tax_rate: taxRate,
+            tax_amount: taxAmount,
+            total,
             notes: notes || null,
           })
           .select()
@@ -157,7 +160,10 @@ export function InvoiceForm({ clients, userId, initialData, mode }: InvoiceFormP
             status,
             issue_date: issueDate,
             due_date: dueDate || null,
+            subtotal,
             tax_rate: taxRate,
+            tax_amount: taxAmount,
+            total,
             notes: notes || null,
           })
           .eq('id', initialData!.id);

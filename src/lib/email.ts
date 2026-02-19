@@ -100,7 +100,7 @@ export async function sendEstimateEmail({
 
           <div style="text-align: center; padding: 24px; color: #94a3b8; font-size: 12px;">
             <p style="margin: 0;">
-              This estimate was sent via PRO SmartBuild
+              This estimate was sent via BuildMVP
             </p>
           </div>
         </body>

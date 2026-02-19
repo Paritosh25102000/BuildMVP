@@ -1,4 +1,4 @@
-// PRO SmartBuild Database Types
+// BuildMVP Database Types
 // Auto-generated from Supabase schema
 
 // ============================================

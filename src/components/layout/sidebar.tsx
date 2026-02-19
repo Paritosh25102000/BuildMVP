@@ -65,7 +65,7 @@ export function Sidebar({ profile, userEmail }: SidebarProps) {
           <Building2 className="h-5 w-5 text-white" />
         </div>
         <div className="flex flex-col">
-          <span className="text-sm font-semibold">PRO SmartBuild</span>
+          <span className="text-sm font-semibold">BuildMVP</span>
           <span className="text-xs text-slate-400">Construction Manager</span>
         </div>
       </div>

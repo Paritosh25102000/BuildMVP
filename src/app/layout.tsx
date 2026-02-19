@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PRO SmartBuild | Construction Management",
+  title: "BuildMVP | Construction Management",
   description: "Professional construction management platform for contractors",
 };
 

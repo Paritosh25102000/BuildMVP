@@ -67,7 +67,7 @@ export default function SignupPage() {
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600">
             <Building2 className="h-6 w-6 text-white" />
           </div>
-          <span className="text-xl font-bold text-slate-900">PRO SmartBuild</span>
+          <span className="text-xl font-bold text-slate-900">BuildMVP</span>
         </div>
 
         <Card>
